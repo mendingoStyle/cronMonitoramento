@@ -1,24 +1,17 @@
 const cron = require('node-cron');
-
 let lockFile = require('lockfile')
 let Client = require('ftp');
-var fs = require('fs');
+let fs = require('fs');
 const util = require('util');
 const exec = util.promisify(require('child_process').exec);
-var async = require('async');
-var axios = require('axios');
-var FormData = require('form-data');
-
-
-
-
-
+let async = require('async');
+let axios = require('axios');
 
 
 
 async function comandoWindows(urlcomplete, url) {
   try {
-    exec('exiftool -v4 imagens/' +  url, async (err, stdout, stderr) => {
+    exec('exiftool -v4 imagens/' + url, async (err, stdout, stderr) => {
       if (err) {
         console.error(err);
         return;
@@ -30,20 +23,16 @@ async function comandoWindows(urlcomplete, url) {
         mac = stdout.substring(mac_place + 4, mac_place + 21)
       } else mac = "Default"
 
-      cadastrarCaptura(url, urlcomplete, mac)
-        .then(r => {
-          const id = r ? r.id : null
-          console.log('capturaId: ' + id)
 
-        })
-        .catch(err => {
-          console.log('erro ao cadastrar captura')
-          console.log(err)
-        })
+      await cadastrarCaptura(url, urlcomplete, mac)
+
+
+
+
 
     });
   } catch (e) {
-    console.log(e)
+    return e
   }
 
 
@@ -59,17 +48,17 @@ async function verificaURL(url) {
     data: null
   };
   return await axios(config)
-    .then(function (response) {
-      console.log(response.data)
+    .then(async function (response) {
+      console.log( response.data)
       return response.data
     })
-    .catch(function (error) {
+    .catch(async function (error) {
       console.log(error)
-      return null
+      return error
     });
 
 }
-async function cadastrarCaptura(url,urlcomplete, mac) {
+async function cadastrarCaptura(url, urlcomplete, mac) {
   let dataCaptura = urlcomplete.substring(12, 20)
   let ano = dataCaptura.substring(0, 4)
   let mes = dataCaptura.substring(4, 6)
@@ -77,13 +66,13 @@ async function cadastrarCaptura(url,urlcomplete, mac) {
   let placa = urlcomplete.substring(32, 39)
 
   let dataFormatado = new Date(ano + '-' + mes + '-' + dia)
-  let data = new FormData();
 
-  data.append('mac', mac)
-  data.append('url', url)
-  data.append('placa', placa);
-  data.append('file', fs.createReadStream(urlcomplete));
-  data.append('dataHora', dataFormatado.toUTCString())
+  let data = {
+    mac: mac,
+    url: url,
+    placa: placa,
+    dataHora: dataFormatado
+  }
 
 
   var config = {
@@ -91,78 +80,96 @@ async function cadastrarCaptura(url,urlcomplete, mac) {
     url: 'http://localhost:9000/api/capturas/',
     headers: {
       accept: 'application/json',
-      ...data.getHeaders()
     },
     data: data
   };
 
 
-  await axios(config)
-    .then(function (response) {
-      console.log(response)
-      return response.data
-      
+  return await axios(config)
+    .then(async function (response) {
+      return response
+
     })
-    .catch(function (error) {
+    .catch(async function (error) {
       console.log(error)
+      if (error.response.data.message = 'Validation error') {
+        return await cadastrarCaptura(url, urlcomplete, mac)
+      }
       return null
     });
 
 }
 
 
-function mainThread() {
-  
-  let c = new Client(); 
+async function mainThread() {
+  let ops = {
 
-  var listFile = function () {
-    return new Promise(function (resolve, reject) {
-      c.list(function (err, list) {
-        if (err) reject(err)
-        resolve(list)
-      })
-    })
   }
-  //Get and unzipfiles from all folders
+  lockFile.lock('some-file.lock', ops, async function (er) {
+    console.log(er)
+    console.log('começou')
+    // if the er happens, then it failed to acquire a lock.
+    // if there was not an error, then the file was created,
+    // and won't be deleted until we unlock it.
+    if(er) return null
+    let c = new Client();
 
-  listFile().then((paths) => {
-    async.mapLimit(paths, 1, function (file, callback) {
-      verificaURL(file.name).then(response => {
-        if (response == null) {
-          c.get(file.name, function (err, stream) {
-            if (err) {
-              console.log('Error getting ' + file.name)
-              callback(err)
-            } else {
-
-              stream.pipe(fs.createWriteStream('imagens/' + file.name)).on('finish', async () => {
-                await comandoWindows('imagens/' + file.name, file.name )
-                callback();
-              })
-            }
-          })
-        } else {
-          console.log('Já cadastrado')
-          callback()
-        }
-      }).catch(e => {
-        console.log(e)
+    let listFile = async function () {
+      return new Promise(function (resolve, reject) {
+        c.list(function (err, list) {
+          if (err) reject(err)
+          resolve(list)
+        })
       })
-    }, function (err, res) {
-      if (err) console.log(err)
-      console.log(res)
+    }
+    //Get and unzipfiles from all folders
+
+    listFile().then(async (paths) => {
+      async.mapLimit(paths, 1, function (file, callback) {
+        verificaURL(file.name).then(async response => {
+          console.log(response)
+          if (!response) {
+            c.get(file.name, async function (err, stream) {
+              if (err) {
+                console.log('Error getting ' + file.name)
+                callback(err)
+              } else {
+                return stream.pipe(fs.createWriteStream('imagens/' + file.name)).on('finish', async () => {
+                  await comandoWindows('imagens/' + file.name, file.name)
+                  callback();
+                })
+              }
+            })
+          } else {
+            callback()
+          }
+        }).catch(e => {
+          console.log(e)
+        })
+      }, function (err, res) {
+        if (err) console.log(err)
+        lockFile.unlock('some-file.lock', function (er) {
+          // er means that an error happened, and is probably bad.
+        })
+        console.log('terminou terminado')
+      })
+
     })
 
+    var connectionProperties = {
+      user: "teste",
+      password: "teste",
+    };
+    c.connect(connectionProperties);
+    // do my stuff, free of interruptions
+    // then, some time later, do:
   })
 
-  var connectionProperties = {
-    user: "teste",
-    password: "teste",
-  };
-  c.connect(connectionProperties);
 }
+cron.schedule('* * * * *', async () => {
+  await mainThread()
+});
 
-mainThread()
 
 
 
