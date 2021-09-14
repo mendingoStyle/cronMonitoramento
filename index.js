@@ -6,6 +6,7 @@ const util = require('util');
 const exec = util.promisify(require('child_process').exec);
 let async = require('async');
 let axios = require('axios');
+require('dotenv/config');
 
 
 
@@ -105,7 +106,7 @@ async function mainThread() {
   let ops = {
 
   }
-  lockFile.lock('some-file.lock', ops, async function (er) {
+  lockFile.lock(process.env.LOCK_FILE_NAME + '.lock', ops, async function (er) {
     console.log(er)
     console.log('começou')
     // if the er happens, then it failed to acquire a lock.
@@ -116,7 +117,7 @@ async function mainThread() {
 
     let listFile = async function () {
       return new Promise(function (resolve, reject) {
-        c.list(function (err, list) {
+        c.list(process.env.path_ftp, function (err, list) {
           if (err) reject(err)
           resolve(list)
         })
@@ -129,7 +130,7 @@ async function mainThread() {
         verificaURL(file.name).then(async response => {
           console.log(response)
           if (!response) {
-            c.get(file.name, async function (err, stream) {
+            c.get(path_ftp + "/" + file.name, async function (err, stream) {
               if (err) {
                 console.log('Error getting ' + file.name)
                 callback(err)
@@ -148,17 +149,19 @@ async function mainThread() {
         })
       }, function (err, res) {
         if (err) console.log(err)
-        lockFile.unlock('some-file.lock', function (er) {
+        lockFile.unlock(process.env.LOCK_FILE_NAME + '.lock', function (er) {
           // er means that an error happened, and is probably bad.
-        })
-        console.log('terminou terminado')
+        })      
+        c.end()
       })
 
     })
 
     var connectionProperties = {
-      user: "teste",
-      password: "teste",
+      host: process.env.ftp_host,
+      port: process.env.ftp_port,
+      user: process.env.ftp_login,
+      password: process.env.ftp_senha,
     };
     c.connect(connectionProperties);
     // do my stuff, free of interruptions
