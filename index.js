@@ -130,7 +130,7 @@ async function mainThread() {
         verificaURL(file.name).then(async response => {
           console.log(response)
           if (!response) {
-            c.get(path_ftp + "/" + file.name, async function (err, stream) {
+            c.get(process.env.path_ftp + "/" + file.name, async function (err, stream) {
               if (err) {
                 console.log('Error getting ' + file.name)
                 callback(err)
@@ -164,8 +164,7 @@ async function mainThread() {
       password: process.env.ftp_senha,
     };
     c.connect(connectionProperties);
-    // do my stuff, free of interruptions
-    // then, some time later, do:
+
   })
 
 }
