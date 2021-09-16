@@ -1,3 +1,5 @@
-imagens
+imagens/*.png
+imagens/*.jpg
+imagens/*.jpeg
 
 node_modules

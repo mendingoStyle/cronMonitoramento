@@ -42,7 +42,7 @@ async function verificaURL(url) {
 
   let config = {
     method: 'get',
-    url: `http://localhost:9000/api/capturas/${url}/imagem`,
+    url: `http://localhost:9000/cron/capturas/${url}/imagem`,
     headers: {
       accept: 'application/json',
     },
@@ -78,7 +78,7 @@ async function cadastrarCaptura(url, urlcomplete, mac) {
 
   var config = {
     method: 'post',
-    url: 'http://localhost:9000/api/capturas/',
+    url: 'http://localhost:9000/cron/capturas/',
     headers: {
       accept: 'application/json',
     },
