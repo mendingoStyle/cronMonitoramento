@@ -20,15 +20,34 @@ async function comandoWindows(urlcomplete, url) {
 
       let mac_place = stdout.search("Mac=")
       let mac;
+      let modelo_place = stdout.search("Modelo=")
+
+      let make= ""
+      let make_place = stdout.search("Make = ")
+      let creation_time_place = stdout.search("CreateDate = 20")
+      let creation_time = "" 
+
+      if(creation_time_place != -1){
+        creation_time = stdout.substring(creation_time_place + 24, creation_time_place  + 32)
+      }
+      
+
+      if(make_place != -1){
+        make = stdout.substring(make_place + 7, make_place  + 17)
+      }
+      
+      if(modelo_place != -1){
+        modelo = stdout.substring(modelo_place + 7, modelo_place  + 17)
+     
+      } else modelo = ""
+      modelo = make + " " + modelo
+      console.log(modelo)
       if (mac_place != -1) {
         mac = stdout.substring(mac_place + 4, mac_place + 21)
       } else mac = "Default"
 
 
-      await cadastrarCaptura(url, urlcomplete, mac)
-
-
-
+      await cadastrarCaptura(url, urlcomplete, mac, modelo, creation_time)
 
 
     });
@@ -50,16 +69,16 @@ async function verificaURL(url) {
   };
   return await axios(config)
     .then(async function (response) {
-      console.log( response.data)
+     
       return response.data
     })
     .catch(async function (error) {
-      console.log(error)
+    
       return error
     });
 
 }
-async function cadastrarCaptura(url, urlcomplete, mac) {
+async function cadastrarCaptura(url, urlcomplete, mac, modelo,creation) {
   let dataCaptura = urlcomplete.substring(12, 20)
   let ano = dataCaptura.substring(0, 4)
   let mes = dataCaptura.substring(4, 6)
@@ -69,6 +88,8 @@ async function cadastrarCaptura(url, urlcomplete, mac) {
   let dataFormatado = new Date(ano + '-' + mes + '-' + dia)
 
   let data = {
+    detalhes: creation,
+    modelo: modelo,
     mac: mac,
     url: url,
     placa: placa,
@@ -92,7 +113,7 @@ async function cadastrarCaptura(url, urlcomplete, mac) {
 
     })
     .catch(async function (error) {
-      console.log(error)
+    
       if (error.response.data.message = 'Validation error') {
         return await cadastrarCaptura(url, urlcomplete, mac)
       }
@@ -107,7 +128,6 @@ async function mainThread() {
 
   }
   lockFile.lock(process.env.LOCK_FILE_NAME + '.lock', ops, async function (er) {
-    console.log(er)
     console.log('começou')
     // if the er happens, then it failed to acquire a lock.
     // if there was not an error, then the file was created,
@@ -128,11 +148,11 @@ async function mainThread() {
     listFile().then(async (paths) => {
       async.mapLimit(paths, 1, function (file, callback) {
         verificaURL(file.name).then(async response => {
-          console.log(response)
+
           if (!response) {
             c.get(process.env.path_ftp + "/" + file.name, async function (err, stream) {
               if (err) {
-                console.log('Error getting ' + file.name)
+
                 callback(err)
               } else {
                 return stream.pipe(fs.createWriteStream('imagens/' + file.name)).on('finish', async () => {
@@ -145,10 +165,10 @@ async function mainThread() {
             callback()
           }
         }).catch(e => {
-          console.log(e)
+
         })
       }, function (err, res) {
-        if (err) console.log(err)
+   
         lockFile.unlock(process.env.LOCK_FILE_NAME + '.lock', function (er) {
           // er means that an error happened, and is probably bad.
         })      
