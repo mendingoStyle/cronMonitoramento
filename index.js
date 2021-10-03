@@ -22,26 +22,26 @@ async function comandoWindows(urlcomplete, url) {
       let mac;
       let modelo_place = stdout.search("Modelo=")
 
-      let make= ""
+      let make = ""
       let make_place = stdout.search("Make = ")
       let creation_time_place = stdout.search("CreateDate = 20")
-      let creation_time = "" 
+      let creation_time = ""
 
-      if(creation_time_place != -1){
-        creation_time = stdout.substring(creation_time_place + 24, creation_time_place  + 32)
+      if (creation_time_place != -1) {
+        creation_time = stdout.substring(creation_time_place + 24, creation_time_place + 32)
       }
-      
 
-      if(make_place != -1){
-        make = stdout.substring(make_place + 7, make_place  + 17)
+
+      if (make_place != -1) {
+        make = stdout.substring(make_place + 7, make_place + 17)
       }
-      
-      if(modelo_place != -1){
-        modelo = stdout.substring(modelo_place + 7, modelo_place  + 17)
-     
+
+      if (modelo_place != -1) {
+        modelo = stdout.substring(modelo_place + 7, modelo_place + 17)
+
       } else modelo = ""
       modelo = make + " " + modelo
-      console.log(modelo)
+
       if (mac_place != -1) {
         mac = stdout.substring(mac_place + 4, mac_place + 21)
       } else mac = "Default"
@@ -69,16 +69,16 @@ async function verificaURL(url) {
   };
   return await axios(config)
     .then(async function (response) {
-     
+
       return response.data
     })
     .catch(async function (error) {
-    
+
       return error
     });
 
 }
-async function cadastrarCaptura(url, urlcomplete, mac, modelo,creation) {
+async function cadastrarCaptura(url, urlcomplete, mac, modelo, creation) {
   let dataCaptura = urlcomplete.substring(12, 20)
   let ano = dataCaptura.substring(0, 4)
   let mes = dataCaptura.substring(4, 6)
@@ -110,11 +110,10 @@ async function cadastrarCaptura(url, urlcomplete, mac, modelo,creation) {
   return await axios(config)
     .then(async function (response) {
       return response
-
     })
     .catch(async function (error) {
-    
-      if (error.response.data.message = 'Validation error') {
+
+      if (!error && !error.response && !error.response.data && error.response.data.message === 'Validation error') {
         return await cadastrarCaptura(url, urlcomplete, mac)
       }
       return null
@@ -122,69 +121,154 @@ async function cadastrarCaptura(url, urlcomplete, mac, modelo,creation) {
 
 }
 
+async function goThroughPaths(paths, c) {
+  async.mapLimit(paths, 1, function (file, callback) {
+    verificaURL(file.name).then(response => {
+      if (!response) {
+        callback()
+      } else {
+        if (!(file.name.indexOf('.jpg') !== -1)) {
+        } else {
+          if (fs.existsSync('imagens/' + file.name)) {
+            c.put('imagens/' + file.name, file.name, false, function (error) {
+              if (!error) {
+                c.cdup(function (err) {
+                  if (!err) {
+                    c.delete(file.name, function (deleteError) {
+                      if (!deleteError) {
+                        c.cwd(process.env.path_ftp + '/' + process.env.path_ftp_subdiretorio_lidas, function (errcwd) {
+                          if (!errcwd) callback()
+                        })
+                      }
+                    })
+                  }
+                })
+              } else {
+                callback(error)
+              }
+            })
 
+          } else {
+            callback()
+          }
+
+        }
+
+
+
+      }
+    })
+  }, function (err, res) {
+
+
+    lockFile.unlock(process.env.LOCK_FILE_NAME + '.lock', function (er) {
+      console.log('terminou')
+      paths.forEach(element => {
+
+        if ((element.name.indexOf('.jpg') !== -1)) {
+          var config = {
+            method: 'get',
+            url: `http://localhost:9000/cron/capturas/${element.name}/imagem/captura`,
+            headers: {
+              accept: 'application/json',
+            },
+          };
+          axios(config)
+            .then(function (response) {
+
+            })
+            .catch(function (error) {
+
+            });
+        }
+
+
+      });
+      c.end()
+    })
+  })
+
+}
+
+async function putOnAlreadyRead(paths, c) {
+  c.cwd(process.env.path_ftp + '/' + process.env.path_ftp_subdiretorio_lidas, function (errcwd) {
+    if (errcwd && errcwd.code == 550) {
+      c.mkdir(process.env.path_ftp + '/' + process.env.path_ftp_subdiretorio_lidas, false, function (errmdkir) {
+        if (errmdkir) {
+
+        } else {
+          c.cwd(process.env.path_ftp + '/' + process.env.path_ftp_subdiretorio_lidas, function (errcwd2) {
+            if (!errcwd2) {
+              goThroughPaths(paths, c)
+            }
+          })
+        }
+      })
+    } else {
+      if (!errcwd) {
+        goThroughPaths(paths, c)
+      }
+    }
+  })
+}
 async function mainThread() {
   let ops = {
 
   }
   lockFile.lock(process.env.LOCK_FILE_NAME + '.lock', ops, async function (er) {
-    console.log('começou')
-    // if the er happens, then it failed to acquire a lock.
-    // if there was not an error, then the file was created,
-    // and won't be deleted until we unlock it.
-    if(er) return null
-    let c = new Client();
+    if (!er) {
+      console.log('começou')
+      if (er) return null
+      let c = new Client();
 
-    let listFile = async function () {
-      return new Promise(function (resolve, reject) {
-        c.list(process.env.path_ftp, function (err, list) {
-          if (err) reject(err)
-          resolve(list)
+      let listFile = async function () {
+        return new Promise(function (resolve, reject) {
+          c.list(process.env.path_ftp, function (err, list) {
+            if (err) reject(err)
+            resolve(list)
+          })
         })
-      })
-    }
-    //Get and unzipfiles from all folders
+      }
+      //Get and unzipfiles from all folders
 
-    listFile().then(async (paths) => {
-      async.mapLimit(paths, 1, function (file, callback) {
-        verificaURL(file.name).then(async response => {
-
-          if (!response) {
-            c.get(process.env.path_ftp + "/" + file.name, async function (err, stream) {
-              if (err) {
-
-                callback(err)
-              } else {
-                return stream.pipe(fs.createWriteStream('imagens/' + file.name)).on('finish', async () => {
-                  await comandoWindows('imagens/' + file.name, file.name)
-                  callback();
-                })
-              }
-            })
+      listFile().then(async (paths) => {
+        async.mapLimit(paths, 1, function (file, callback) {
+          if (!(file.name.indexOf('.jpg') !== -1)) {
+            callback();
           } else {
-            callback()
-          }
-        }).catch(e => {
+            verificaURL(file.name).then(response => {
+              if (!response) {
+                c.get(process.env.path_ftp + "/" + file.name, function (err, stream) {
+                  if (err) {
+                    callback(err)
+                  } else {
+                    return stream.pipe(fs.createWriteStream('imagens/' + file.name)).on('finish', async () => {
+                      await comandoWindows('imagens/' + file.name, file.name)
+                      callback();
+                    })
+                  }
+                })
+              } else {
+                callback()
+              }
+            }).catch(e => {
 
+            })
+          }
+        }, function (err, res) {
+          putOnAlreadyRead(paths, c)
         })
-      }, function (err, res) {
-   
-        lockFile.unlock(process.env.LOCK_FILE_NAME + '.lock', function (er) {
-          // er means that an error happened, and is probably bad.
-        })      
-        c.end()
+
       })
 
-    })
-
-    var connectionProperties = {
-      host: process.env.ftp_host,
-      port: process.env.ftp_port,
-      user: process.env.ftp_login,
-      password: process.env.ftp_senha,
-    };
-    c.connect(connectionProperties);
-
+      var connectionProperties = {
+        host: process.env.ftp_host,
+        port: process.env.ftp_port,
+        user: process.env.ftp_login,
+        password: process.env.ftp_senha,
+      };
+      c.connect(connectionProperties);
+    }
   })
 
 }

@@ -1,1 +1,0 @@
-pasta para armazenar as imagens baixadas pelo cron.
